@@ -1,8 +1,8 @@
 import { Outlet, Navigate } from "react-router-dom"
+import { useUserContext } from "@/context/AuthContext"
 
 const AuthLayout = () => {
-  {/*Check if user is authenticated */}
-  const isAuthenticated = false;
+  const { isAuthenticated } = useUserContext();
   return (
    <>
    {isAuthenticated ? (
@@ -26,4 +26,3 @@ const AuthLayout = () => {
 }
 
 export default AuthLayout
-/*this layout routes our signin and signupform*/

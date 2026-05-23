@@ -1,6 +1,5 @@
-import { useUserContext } from "@/context/AuthContext";
 import {
-  useDeletePost,
+  useDeleteSavedPost,
   useGetCurrentUser,
   useLikePost,
   useSavePost,
@@ -8,7 +7,6 @@ import {
 import { checkIsLiked } from "@/lib/utils";
 import { Models } from "appwrite";
 import React, { useEffect, useState } from "react";
-import { record } from "zod";
 import Loader from "./Loader";
 
 type PostStatsProps = {
@@ -17,7 +15,7 @@ type PostStatsProps = {
 };
 
 const PostStats = ({ post, userId }: PostStatsProps) => {
-  const likeList = post.likes.map((user: Models.Document) => user.$id);
+  const likeList = (post.likes || []).map((user: Models.Document) => user.$id);
 
   const [likes, setLikes] = useState(likeList);
   const [isSaved, setIsSaved] = useState(false);
@@ -25,7 +23,7 @@ const PostStats = ({ post, userId }: PostStatsProps) => {
   const { mutate: likePost } = useLikePost();
   const { mutate: savePost, isPending: isSavingPost } = useSavePost();
   const { mutate: deleteSavedPost, isPending: isDeletingSaved } =
-    useDeletePost();
+    useDeleteSavedPost();
   const { data: currentUser } = useGetCurrentUser();
 
   const savedPostRecord = currentUser?.save?.find(

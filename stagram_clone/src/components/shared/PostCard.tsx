@@ -1,6 +1,6 @@
 
 import { useUserContext } from "@/context/AuthContext";
-import timeAgo from "@/lib/utils";
+import { multiFormatDateString } from "@/lib/utils";
 import { Models } from "appwrite"
 import { Link } from "react-router-dom";
 import PostStats from "./PostStats";
@@ -11,7 +11,6 @@ type PostCardProps = {
 
 function PostCard({post}: PostCardProps) {
     const {user} = useUserContext();
-    console.log(post);
     if (!post.creator) return;
   return (
     <div className="post-card">
@@ -21,7 +20,7 @@ function PostCard({post}: PostCardProps) {
             <img
               src={
                 post?.creator?.imageUrl ||
-                "/asstes/icons/profile-placeholder.svg"
+                "/assets/icons/profile-placeholder.svg"
               }
               alt="creator"
               className="roundedull w-12 lg: h-12"
@@ -34,7 +33,7 @@ function PostCard({post}: PostCardProps) {
             </p>
             <div className="flex-center gap text-light-3">
               <p className="subtle-semibold lg:small-regular">
-                {timeAgo(post.$createdAt)}
+                {multiFormatDateString(post.$createdAt)}
               </p>
               -<p className="subtlebold lg:small-regular">{post.location}</p>
             </div>

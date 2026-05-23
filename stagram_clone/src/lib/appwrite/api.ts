@@ -1,5 +1,5 @@
-import { ID, ImageGravity, Query } from 'appwrite'
-import { INewPost, INewUser, IUpdatePost } from "@/types";
+import { ID, Query } from 'appwrite'
+import { INewPost, INewUser, IUpdatePost, IUpdateUser } from "@/types";
 import { account, avatars,  appwriteConfig, databases, storage } from './config';
 
 
@@ -16,7 +16,7 @@ export async function createUserAccount(user: INewUser){
         );
         if(!newAccount) throw Error;
         const avatarUrl = avatars.getInitials(user.name);
-        const newUser = await saveUserToDB({
+        await saveUserToDB({
           accountId: newAccount.$id,
           name: newAccount.name,
           email: newAccount.email,
@@ -160,18 +160,9 @@ export async function uploadFile(file: File) {
 // ============================== GET FILE URL
 export function getFilePreview(fileId: string) {
   try {
-    const fileUrl = storage.getFilePreview(
-      appwriteConfig.storageId,
-      fileId,
-      2000, //width
-      2000, //height
-      "top" as ImageGravity,  //where the file url is going to show
-      100
-    );
-
-    if (!fileUrl) throw Error;
-
-    return fileUrl;
+    const endpoint = appwriteConfig.url;
+    const url = `${endpoint}/storage/buckets/${appwriteConfig.storageId}/files/${fileId}/view?project=${appwriteConfig.projectId}`;
+    return url;
   } catch (error) {
     console.log(error);
   }
@@ -298,7 +289,7 @@ export async function updatePost(post: IUpdatePost) {
       await deleteFile(uploadedFile.$id); //if it is not having a file url, we delete the file, reason being that the e might have been corrupted
       throw Error;
     }
-    image = {...image, imageUrl:fileUrl, imageId: uploadedFile.$id }
+    image = {...image, imageUrl:fileUrl as unknown as URL, imageId: uploadedFile.$id }
     }
     
     // Convert tags into array
@@ -358,5 +349,221 @@ export async function searchPosts(searchTerm: string) {
     return posts;
   } catch (error) {
     console.log(error);
+  }
+}
+
+export async function getInfinitePosts({ pageParam }: { pageParam: number }) {
+  const queries: any[] = [Query.orderDesc("$updatedAt"), Query.limit(9)];
+
+  if (pageParam) {
+    queries.push(Query.cursorAfter(pageParam.toString()));
+  }
+
+  try {
+    const posts = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.postCollectionId,
+      queries
+    );
+
+    if (!posts) throw Error;
+
+    return posts;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+// ============================== GET USER'S POST
+export async function getUserPosts(userId?: string) {
+  if (!userId) return;
+
+  try {
+    const post = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.postCollectionId,
+      [Query.equal("creator", userId), Query.orderDesc("$createdAt")]
+    );
+
+    if (!post) throw Error;
+
+    return post;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+// ============================================================
+// USER
+// ============================================================
+
+// ============================== GET USERS
+export async function getUsers(limit?: number) {
+  const queries: any[] = [Query.orderDesc("$createdAt")];
+
+  if (limit) {
+    queries.push(Query.limit(limit));
+  }
+
+  try {
+    const users = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      queries
+    );
+
+    if (!users) throw Error;
+
+    return users;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+// ============================== GET USER BY ID
+export async function getUserById(userId: string) {
+  try {
+    const user = await databases.getDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      userId
+    );
+
+    if (!user) throw Error;
+
+    return user;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+}
+
+// ============================== UPDATE USER
+export async function updateUser(user: IUpdateUser) {
+  const hasFileToUpdate = user.file.length > 0;
+  try {
+    let image = {
+      imageUrl: user.imageUrl,
+      imageId: user.imageId,
+    };
+
+    if (hasFileToUpdate) {
+      const uploadedFile = await uploadFile(user.file[0]);
+      if (!uploadedFile) throw Error;
+
+      const fileUrl = getFilePreview(uploadedFile.$id);
+      if (!fileUrl) {
+        await deleteFile(uploadedFile.$id);
+        throw Error;
+      }
+
+      image = { ...image, imageUrl: fileUrl, imageId: uploadedFile.$id };
+    }
+
+    const updatedUser = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.userCollectionId,
+      user.userId,
+      {
+        name: user.name,
+        bio: user.bio,
+        imageUrl: image.imageUrl,
+        imageId: image.imageId,
+      }
+    );
+
+    if (!updatedUser) {
+      if (hasFileToUpdate) {
+        await deleteFile(image.imageId);
+      }
+      throw Error;
+    }
+
+    if (user.imageId && hasFileToUpdate) {
+      await deleteFile(user.imageId);
+    }
+
+    return updatedUser;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+// ============================================================
+// FOLLOWS
+// ============================================================
+
+export async function followUser(followerId: string, followingId: string) {
+  try {
+    const follow = await databases.createDocument(
+      appwriteConfig.databaseId,
+      "follows",
+      ID.unique(),
+      {
+        followerId,
+        followingId,
+        status: "active",
+        followDate: new Date().toISOString(),
+      }
+    );
+    return follow;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function unfollowUser(followRecordId: string) {
+  try {
+    await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      "follows",
+      followRecordId
+    );
+    return { status: "ok" };
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function getFollowers(userId: string) {
+  try {
+    const followers = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      "follows",
+      [Query.equal("followingId", userId), Query.limit(100)]
+    );
+    return followers;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function getFollowing(userId: string) {
+  try {
+    const following = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      "follows",
+      [Query.equal("followerId", userId), Query.limit(100)]
+    );
+    return following;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+export async function checkIsFollowing(followerId: string, followingId: string) {
+  try {
+    const result = await databases.listDocuments(
+      appwriteConfig.databaseId,
+      "follows",
+      [
+        Query.equal("followerId", followerId),
+        Query.equal("followingId", followingId),
+      ]
+    );
+    return result.documents.length > 0 ? result.documents[0] : null;
+  } catch (error) {
+    console.log(error);
+    return null;
   }
 }
